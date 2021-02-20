@@ -1,0 +1,20 @@
+{
+    "embed2class": {
+        "embed_dims": 500,
+        "embed_h5py": "/home/ihakki/abstractness/data/pretrained-embeddings/glove_300_vico_select_200/visual_word_vecs.h5py",
+        "embed_word_to_idx_json": "/home/ihakki/abstractness/data/pretrained-embeddings/glove_300_vico_select_200/visual_word_vecs_idx.json",
+        "glove_dim": 300,
+        "hypernym": false,
+        "no_glove": true,
+        "num_classes": 100
+    },
+    "embed2class_path": "/home/ihakki/abstractness/exp/cifar100/run_4/vico_select_w-simloss_wo-hypernym/models/embed2class_None",
+    "model_num": null,
+    "net": {
+        "num_classes": 100,
+        "num_layers": "cifar100",
+        "pretrained": false
+    },
+    "net_path": "/home/ihakki/abstractness/exp/cifar100/run_4/vico_select_w-simloss_wo-hypernym/models/net_None",
+    "sim_loss": true
+}

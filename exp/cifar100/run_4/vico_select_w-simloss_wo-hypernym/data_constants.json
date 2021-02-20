@@ -1,0 +1,5 @@
+{
+    "download": false,
+    "root": "/home/ihakki/abstractness/data/cifar100",
+    "train": true
+}
