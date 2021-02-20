@@ -1,6 +1,6 @@
 ### Centered Kernel Alignment on Attribute Embeddings
 
-Align similarity (Kornblith et. al, 2019) of feature maps between classes with similarity of the attribute embeddings (adapted from ViCo (Gupta et. al, 2019))
+Align the similarity (Kornblith et. al, 2019) of feature maps between classes with the similarity of the attribute embeddings (adapted from ViCo (Gupta et. al, 2019))
 
 #### References
 
