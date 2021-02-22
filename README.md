@@ -1,6 +1,6 @@
 ### Centered Kernel Alignment on Attribute Embeddings
 
-In brief, I want to align the similarity kernel (Kornblith et. al, 2019) of image features (from CNNs) between categories with the similarity kernel of the word embeddings for the categories (adapted from ViCo (Gupta et. al, 2019), but there are other options for language models). 
+In brief, I want to align the similarity kernel (Kornblith et. al, 2019) of image features (from CNNs) between categories with the similarity kernel of the word embeddings for the categories (adapted from ViCo (Gupta et. al, 2019), but there are many other options for language models: BERT, word2vec, GloVe). 
 
 Given a supervised image classification task, my aim is to use the language supervision by trying to align the kernels representing the inter-similarities between the target categories induced by two different types of representational spaces: visual features and word embeddings. To that end, there are two aspects worth noting: 
 
