@@ -12,9 +12,11 @@ Given a supervised image classification task, my aim is to use the language supe
 ![plot](./images/algo.png)
 
 ### Scores on CIFAR-100
-CE stands for Cross-Entrop, which is the baseline loss/objective. For now, I directly use the embeddings from ViCo, without projecting onto visual attributes.
-![plot](./images/score_table.png)
 
+CE stands for Cross-Entropy, which is the baseline loss/objective. For now, I directly use the embeddings from ViCo, without projecting onto visual attributes.
+|               | CE     | CKA on ViCO + CE | CKA on ViCO + Adaptive CE | CKA on OneHot + CE |
+| ------------- | ------ | ---------------- | ------------------------- | ------------------ |
+| Resnet-18     | 74.53  |       75.79      |         76.75             |        76.25       |
 
 
 #### References
