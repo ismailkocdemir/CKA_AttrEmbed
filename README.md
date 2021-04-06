@@ -8,9 +8,6 @@ There are two aspects worth noting:
 
 2. Aligning the similarity kernels from the two spaces saves us from learning a new mapping from visual representations to word embedding, or a new shared embedding space.
 
-### Algorithm
-![plot](./images/algo.png)
-
 ### Scores on CIFAR-100
 
 CE stands for Cross-Entropy, which is the baseline loss/objective. For now, I directly use the embeddings from ViCo, without projecting onto visual attributes.
