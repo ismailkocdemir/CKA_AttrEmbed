@@ -8,8 +8,13 @@ Given a supervised image classification task, my aim is to use the language supe
 
 2. Aligning the similarity kernels from the two spaces saves us from learning a new mapping from visual representations to word embedding, or a new shared embedding space.
 
-![plot](./images/score_table.png)
+### Algorithm
 ![plot](./images/algo.png)
+
+### Scores on CIFAR-100
+CE stands for Cross-Entrop, which is the baseline loss/objective. For now, I directly use the embeddings from ViCo, without projecting onto visual attributes.
+![plot](./images/score_table.png)
+
 
 
 #### References
