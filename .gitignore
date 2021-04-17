@@ -136,3 +136,8 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# large files like datasets checkpoints
+data/
+checkpoints/
+exp/

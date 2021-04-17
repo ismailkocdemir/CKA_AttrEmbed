@@ -21,7 +21,7 @@ from models.attribute_embeddings import AttributeEmbeddings
 from models.conse import Conse
 from dataset import Cifar100Dataset
 
-def train_model(model,dataloaders,exp_const):
+def train_model(model, dataloaders, exp_const):
     model.attr_embed.load_embeddings(dataloaders['training'].dataset.labels)
     params = model.net.parameters()
     writer = SummaryWriter(exp_const.log_dir)
