@@ -19,7 +19,7 @@ import utils.pytorch_layers as pytorch_layers
 from models.resnet import ResnetModel
 from models.attribute_embeddings import AttributeEmbeddings
 from models.conse import Conse
-from dataset import Cifar100Dataset
+from dataset import get_dataset
 
 def train_model(model, dataloaders, exp_const):
     model.attr_embed.load_embeddings(dataloaders['training'].dataset.labels)
@@ -38,10 +38,6 @@ def train_model(model, dataloaders, exp_const):
             params,
             lr=lr,
             weight_decay=1e-4)
-    elif exp_const.optimizer == 'Adagrad':
-        opt = optim.Adagrad(
-            params,
-            lr=lr)
     else:
         assert(False), 'optimizer not implemented'
 
@@ -51,15 +47,19 @@ def train_model(model, dataloaders, exp_const):
     iter_per_epoch = len(dataloaders['training'])
     warmup_scheduler = pytorch_layers.WarmUpLR(opt, iter_per_epoch * exp_const.warmup_epoch)
 
-    step = 0
-    if model.const.model_num is not None:
-        step = model.const.model_num
+    # convert warmup from epoch to steps for cross entropy loss
+    ce_warmup_steps = model.const.ce_loss_warmup
+    if ce_warmup_steps:
+        ce_warmup_steps = len(dataloaders['training'].dataset) * ce_warmup_steps  
 
-    img_mean = Variable(torch.cuda.FloatTensor(model.img_mean))
-    img_std = Variable(torch.cuda.FloatTensor(model.img_std))
+    step = 0
+    start_epoch = 0
+    if model.const.model_num is not None:
+        step = model.const.model_num * exp_const.batch_size
+        start_epoch = model.const.model_num + 1
 
     selected_model_results = None
-    for epoch in range(exp_const.num_epochs):
+    for epoch in range(start_epoch, exp_const.num_epochs):
         if epoch > exp_const.warmup_epoch:
             train_scheduler.step(epoch)
         for it,data in enumerate(dataloaders['training']):
@@ -71,18 +71,13 @@ def train_model(model, dataloaders, exp_const):
                 model.attr_embed.train()
 
             # Forward pass
-            imgs = Variable(data['img'].cuda().float()/255)
-            imgs = dataloaders['training'].dataset.normalize(
-                imgs,
-                img_mean,
-                img_std)
-            imgs = imgs.permute(0,3,1,2)
-            label_idxs = Variable(data['label_idx'].cuda())
-
+            imgs = data['img'].to(exp_const.device)
+            label_idxs = data['label_idx'].to(exp_const.device)
             logits, feats = model.net(imgs)
 
+            # Compute loss
             log_items = {}
-            targets = torch.linspace(0.4, 0.8, steps=len(feats)).requires_grad_(False)
+            targets = torch.linspace(0.4, 0.8, steps=len(feats)).requires_grad_(False).to(exp_const.device)
             sim_loss_sum = 0.0
             for _idx, feat in enumerate(feats):
                 cka, sim_loss = model.attr_embed(feat, label_idxs, targets[_idx])
@@ -90,8 +85,7 @@ def train_model(model, dataloaders, exp_const):
                 log_items["train/sim_loss_C{}".format(_idx+2)] = sim_loss.item()
                 log_items["train/CKA_C{}".format(_idx+2)] = cka.item()
 
-            # Computer loss
-            ce_loss_weight = (step/10000) if step<10000 else 1
+            ce_loss_weight = max(1, step/ce_warmup_steps) if ce_warmup_steps else 1
             loss = ce_loss_weight*criterion(logits,label_idxs) + \
                                     model.const.sim_loss*sim_loss_sum
 
@@ -121,55 +115,55 @@ def train_model(model, dataloaders, exp_const):
             if step%(10*exp_const.log_step)==0:
                 print(f'Experiment: {exp_const.exp_name}')
                 
-            if step%exp_const.model_save_step==0:
-                save_items = {
-                    'net': model.net,
-                    'attr_embed': model.attr_embed
-                }
-
-                for name,nn_model in save_items.items():
-                    model_path = os.path.join(
-                        exp_const.model_dir,
-                        f'{name}_{step}')
-                    torch.save(nn_model.state_dict(),model_path)
-
-            if step%exp_const.val_step==0:
-                eval_results = eval_model(
-                    model,
-                    dataloaders['test'],
-                    exp_const,
-                    step)
-                print(eval_results)
-                for name,value in eval_results.items():
-                    log_str += '{}: {:.4f} | '.format(name,value)
-                    writer.add_scalar(name,value,step)
-
-                if selected_model_results is None:
-                    selected_model_results = eval_results
-                else:
-                    if eval_results['val/acc'] >= \
-                            selected_model_results['val/acc']:
-                        selected_model_results = eval_results
-                
-                selected_model_results_json = os.path.join(
-                    exp_const.exp_dir,
-                    'selected_model_results.json')
-                io.dump_json_object(
-                    selected_model_results,
-                    selected_model_results_json)
-
             writer.flush()
-            step += 1
+            step += exp_const.batch_size
+            # end of iteration
+        
+        # end of epoch. save if needed.
+        if epoch%exp_const.model_save_epoch==0:
+            save_items = {
+                'net': model.net,
+                'attr_embed': model.attr_embed
+            }
+
+            for name,nn_model in save_items.items():
+                model_path = os.path.join(
+                    exp_const.model_dir,
+                    f'{name}_{epoch}')
+                torch.save(nn_model.state_dict(),model_path)
+
+        if step%exp_const.val_epoch==0:
+            eval_results = eval_model(
+                model,
+                dataloaders['test'],
+                exp_const,
+                step)
+            print(eval_results)
+            for name,value in eval_results.items():
+                log_str += '{}: {:.4f} | '.format(name,value)
+                writer.add_scalar(name,value,step)
+
+            if selected_model_results is None:
+                selected_model_results = eval_results
+            else:
+                if eval_results['val/acc'] >= \
+                        selected_model_results['val/acc']:
+                    selected_model_results = eval_results
+            
+            selected_model_results_json = os.path.join(
+                exp_const.exp_dir,
+                'selected_model_results.json')
+            io.dump_json_object(
+                selected_model_results,
+                selected_model_results_json)
+
     writer.close()
 
 
-def eval_model(model,dataloader,exp_const,step):
+def eval_model(model, dataloader, exp_const, step):
     # Set mode
     model.net.eval()
     model.attr_embed.eval()
-
-    img_mean = Variable(torch.cuda.FloatTensor(model.img_mean))
-    img_std = Variable(torch.cuda.FloatTensor(model.img_std))
 
     softmax = nn.Softmax(dim=1)
 
@@ -179,13 +173,7 @@ def eval_model(model,dataloader,exp_const,step):
     sim_loss_all = [0.0]
     for it,data in enumerate(dataloader): #enumerate(tqdm(dataloader)):
         # Forward pass
-        imgs = Variable(data['img'].cuda().float()/255)
-        imgs = dataloader.dataset.normalize(
-            imgs,
-            img_mean,
-            img_std)
-        imgs = imgs.permute(0,3,1,2)
-        
+        imgs = data['img'].to(exp_const.device)
         logits,_ = model.net(imgs)
         '''
         label_idxs = Variable(data['label_idx'].cuda())
@@ -227,7 +215,7 @@ def eval_model(model,dataloader,exp_const,step):
     return eval_results
 
 
-def main(exp_const,data_const,model_const):
+def main(exp_const, data_const, model_const):
     io.mkdir_if_not_exists(exp_const.exp_dir,recursive=True)
     io.mkdir_if_not_exists(exp_const.log_dir)
     io.mkdir_if_not_exists(exp_const.model_dir)
@@ -245,10 +233,12 @@ def main(exp_const,data_const,model_const):
         model.net.load_state_dict(torch.load(model.const.net_path))
         model.attr_embed.load_state_dict(
             torch.load(model.const.attr_embed_path))
-    model.net.cuda()
-    model.attr_embed.cuda()
-    model.img_mean = np.array([0.5071, 0.4865, 0.4409])
-    model.img_std = np.array([0.2673, 0.2564, 0.2762])
+    model.net.to(exp_const.device)
+    model.attr_embed.to(exp_const.device)
+    #model.img_mean = np.array([0.5071, 0.4865, 0.4409])
+    #model.img_std = np.array([0.2673, 0.2564, 0.2762])
+    model.img_mean = np.array([0., 0., 0.])
+    model.img_std = np.array([255.0, 255.0, 255.0])
     model.to_file(os.path.join(exp_const.exp_dir,'model.txt'))
 
     print('Creating dataloader ...')
@@ -259,13 +249,13 @@ def main(exp_const,data_const,model_const):
             data_const.train = True
         else:
             data_const.train = False
-        dataset = Cifar100Dataset(data_const)
-        collate_fn = dataset.get_collate_fn()
+        dataset = get_dataset(data_const)
+        #collate_fn = dataset.get_collate_fn()
         dataloaders[mode] = DataLoader(
             dataset,
             batch_size=exp_const.batch_size,
             shuffle=True,
-            num_workers=exp_const.num_workers,
-            collate_fn=collate_fn)
+            num_workers=exp_const.num_workers)
+            #collate_fn=collate_fn)
 
-    train_model(model,dataloaders,exp_const)    
+    train_model(model, dataloaders, exp_const)    

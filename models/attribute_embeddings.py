@@ -15,6 +15,7 @@ class AttributeEmbeddingsConstants(io.JsonSerializableClass):
         self.embed_dims = 500
         self.embed_h5py = None
         self.embed_word_to_idx_json = None
+        self.pool_size = 4
         self.no_glove = True
         self.hypernym = False
 
@@ -25,7 +26,7 @@ class AttributeEmbeddings(nn.Module):
         #"""
         self.embed = nn.Embedding(
             self.const.num_classes,
-            self.const.num_classes).requires_grad_(False)
+            self.const.embed_dims).requires_grad_(False)
         #"""
         
         # ABLATION WITH IDENTITY MATRIX INSTEAD OF EMBEDDING SIMILARITY MATRIX
@@ -82,7 +83,7 @@ class AttributeEmbeddings(nn.Module):
 
         class_sim = self.center_gram(self.gram_linear(feats))
         embed_sim = self.center_gram(self.gram_linear(embed))  
-
+        
         embed_norm = torch.norm(embed_sim, dim=(0,1))
         class_norm = torch.norm(class_sim, dim=(0,1))
         cka = torch.sum((class_sim*embed_sim))/(class_norm*embed_norm)
@@ -98,11 +99,12 @@ class AttributeEmbeddings(nn.Module):
             print("SymNMF", l2_loss)
         """
 
-        return cka, torch.max(torch.cuda.FloatTensor([0]), target-cka)**2
+        zero_tensor = torch.FloatTensor([0]).to(target.device)
+        return cka, torch.max(zero_tensor, target-cka)**2
 
-    def pool_feats(self, feats, pooling_size):
+    def pool_feats(self, feats, pool_size):
         if len(feats.shape) > 2:
-            feats = nn.functional.adaptive_avg_pool2d(feats, max_size)
+            feats = nn.functional.adaptive_avg_pool2d(feats, pool_size)
         return feats.reshape(feats.shape[0], -1)
 
     def gram_linear(self, x):

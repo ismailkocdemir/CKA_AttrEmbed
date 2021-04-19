@@ -1,9 +1,8 @@
-GPU=$1
-EMBED_TYPE=$2
-RUN=$3
+RUN=$1
+GPU=$2
 
 CUDA_VISIBLE_DEVICES=$GPU python run.py \
     --exp exp_train \
-    --embed_type $EMBED_TYPE \
-    --run $RUN \
-    --sim-loss   
+    --run-name $RUN \
+    --sim-loss \
+    --dataroot /HDD/DATASETS/   

@@ -2,7 +2,6 @@ import os
 
 import utils.io as io
 
-
 class Constants(io.JsonSerializableClass):
     def __init__(self):
         pass

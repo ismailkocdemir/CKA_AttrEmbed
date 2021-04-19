@@ -9,43 +9,50 @@ from torch.utils.data.dataloader import default_collate
 import torchvision
 import torchvision.transforms as transforms
 
+from abc import ABC, abstractmethod
 import scipy
 
 from utils import io
 
-class Cifar100DatasetConstants(io.JsonSerializableClass):
-    def __init__(
-            self,
-            root=os.path.join(os.getcwd(),'data/cifar100')):
-        super(Cifar100DatasetConstants,self).__init__()
-        self.root = root
-        self.download = False
-        self.train = True
-        #self.num_held_out_classes = 20 # 20, 40, 60, 80
+def get_dataset(const):
+    if const.dataset_type == "Cifar100":
+        return Cifar100Dataset(const)
+    elif const.dataset_type == 'STL10':
+        return STL10Dataset(const)
+    elif const.dataset_type == 'VOCDetection':
+        return VOCDetectionDataset(const)
+    else:
+        raise NotImplementedError("{} is not implemented yet".format(dataset_type))
 
-class Cifar100Dataset(Dataset):
+class DatasetConstants(io.JsonSerializableClass):
+    def __init__(self, root, download, train):
+        super(DatasetConstants,self).__init__()
+        self.root = root
+        self.download = download
+        self.train = train
+
+class BaseDataset(Dataset, ABC):
     def __init__(self,const):
-        super(Cifar100Dataset,self).__init__()
+        super(BaseDataset,self).__init__()
         self.const = copy.deepcopy(const)
         if self.const.download==True:
             io.mkdir_if_not_exists(self.const.root)
-        self.dataset = torchvision.datasets.CIFAR100(
-            self.const.root,
-            self.const.train,
-            download=self.const.download)
-        self.labels = self.load_labels()
+        
         self.transforms = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomCrop(32,padding=2),
+            transforms.ToTensor(),
+            transforms.Normalize((0., 0., 0.), (1., 1., 1.))
+        ])
+        
+        self.transforms_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0., 0., 0.), (1., 1., 1.))
         ])
 
+    @abstractmethod
     def load_labels(self):
-        meta_file = os.path.join(
-            self.const.root,
-            'cifar-100-python/meta')
-        fo = open(meta_file,'rb')
-        labels = pickle.load(fo,encoding='latin1')['fine_label_names']
-        return labels
+        '''fill in acccording to the chosen dataset. used by <__getitem__>'''
+        pass
+        
     def __len__(self):
         return len(self.dataset)
 
@@ -53,15 +60,15 @@ class Cifar100Dataset(Dataset):
         img,idx = self.dataset[i]
         if self.const.train==True:
             img = self.transforms(img)
+        else:
+            img = self.transforms_test(img)
 
         label = self.labels[idx]
 
         to_return = {
-            'img': np.array(img),
+            'img': img,
             'label_idx': idx,
             'label': label
-            #'super_label': self.fine_to_super[label],
-            #'super_label_idx': self.fine_idx_to_super_idx[idx],
         }
         return to_return
 
@@ -76,11 +83,100 @@ class Cifar100Dataset(Dataset):
 
         return collate_fn
 
+class VOCDetectionDataset(BaseDataset):
+    def __init__(self,const):
+        super().__init__(const)
+        self.dataset = torchvision.datasets.STL10(
+            self.const.root,
+            split='train' if self.const.train else 'test',
+            download=self.const.download
+        )
+        self.labels = self.load_labels()
+        self.transforms = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(96,padding=2),
+            transforms.ToTensor(),
+            transforms.Normalize((0., 0., 0.), (1., 1., 1.))
+        ])
+        
+        self.transforms_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0., 0., 0.), (1., 1., 1.))
+        ])
+
+    def load_labels(self):
+        meta_file = os.path.join(
+            self.const.root,
+            'stl10_binary/class_names.txt')
+        with open(meta_file,'r') as mf:
+            labels = mf.readlines()
+            labels = np.array([lb.strip() for lb in labels])
+        return labels
+
+
+class STL10Dataset(BaseDataset):
+    def __init__(self,const):
+        super().__init__(const)
+        self.dataset = torchvision.datasets.STL10(
+            self.const.root,
+            split='train' if self.const.train else 'test',
+            download=self.const.download
+        )
+        self.labels = self.load_labels()
+        self.transforms = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(96,padding=2),
+            transforms.ToTensor(),
+            transforms.Normalize((0., 0., 0.), (1., 1., 1.))
+        ])
+        
+        self.transforms_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0., 0., 0.), (1., 1., 1.))
+        ])
+
+    def load_labels(self):
+        meta_file = os.path.join(
+            self.const.root,
+            'stl10_binary/class_names.txt')
+        with open(meta_file,'r') as mf:
+            labels = mf.readlines()
+            labels = np.array([lb.strip() for lb in labels])
+        return labels
+
+class Cifar100Dataset(BaseDataset):
+    def __init__(self,const):
+        super().__init__(const)
+        self.dataset = torchvision.datasets.CIFAR100(
+            self.const.root,
+            self.const.train,
+            download=self.const.download)
+        self.labels = self.load_labels()
+        self.transforms = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(32,padding=2),
+            transforms.ToTensor(),
+            transforms.Normalize((0., 0., 0.), (1., 1., 1.))
+        ])
+        
+        self.transforms_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0., 0., 0.), (1., 1., 1.))
+        ])
+
+        
+    def load_labels(self):
+        meta_file = os.path.join(
+            self.const.root,
+            'cifar-100-python/meta')
+        fo = open(meta_file,'rb')
+        labels = pickle.load(fo,encoding='latin1')['fine_label_names']
+        return labels
 
 if __name__=='__main__':
-    const = Cifar100DatasetConstants()
+    const = DatasetConstants()
     const.download = False
-    dataset = Cifar100Dataset(const)
+    dataset = STL10Dataset(const)
     import pdb; pdb.set_trace()
     import scipy
     outdir = os.path.join(
